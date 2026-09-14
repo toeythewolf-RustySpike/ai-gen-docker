@@ -37,7 +37,10 @@ else
 fi
 
 echo "=== เพิ่ม shortcut โหลดโมเดล: ckpt / lora / vae / unet / clipenc ==="
-if ! grep -q "_dl_model" ~/.bashrc 2>/dev/null; then
+if grep -q "_dl_model" ~/.bashrc 2>/dev/null; then
+  sed -i '/^_dl_model() {/,/^}/d' ~/.bashrc
+  sed -i '/^ckpt()/d;/^lora()/d;/^vae()/d;/^unet()/d;/^clipenc()/d' ~/.bashrc
+fi
 cat >> ~/.bashrc << 'EOF'
 
 # --- ComfyUI model download shortcuts (comfyui_vast_setup.sh) ---
@@ -45,16 +48,34 @@ _dl_model() {
   local folder="$1"; local url="$2"
   mkdir -p "/workspace/ComfyUI/models/$folder" && cd "/workspace/ComfyUI/models/$folder" || return 1
 
+  local filename=""
   if [[ "$url" == *civitai.com* || "$url" == *civitai.red* ]]; then
     local origin=$(echo "$url" | grep -oP '(?<=https://)[^/]+')
     local vid=$(echo "$url" | grep -oP '(?<=modelVersionId=)\d+|(?<=/api/download/models/)\d+')
+    if [ -z "$vid" ]; then
+      local mid=$(echo "$url" | grep -oP '(?<=/models/)\d+')
+      if [ -n "$mid" ]; then
+        vid=$(curl -s -H "Authorization: Bearer ${CIVITAI_TOKEN}" "https://${origin}/api/v1/models/${mid}" | grep -oP '"modelVersions":\[\{"id":\K\d+')
+      fi
+    fi
     if [ -n "$vid" ]; then
+      echo "กำลังดึงชื่อไฟล์จริงจาก Civitai..."
+      local meta=$(curl -s -H "Authorization: Bearer ${CIVITAI_TOKEN}" "https://${origin}/api/v1/model-versions/${vid}")
+      filename=$(echo "$meta" | grep -oP '"name":"\K[^"]+\.(safetensors|ckpt|pt)' | head -1)
       url="https://${origin}/api/download/models/${vid}"
       [ -n "$CIVITAI_TOKEN" ] && url="${url}?token=${CIVITAI_TOKEN}"
+    else
+      echo "!! หาเวอร์ชันโมเดลไม่เจอ ให้ copy link จากปุ่ม Download บนเว็บแทน"
+      return 1
     fi
   fi
 
-  aria2c -x16 -s16 -k1M --content-disposition-default-utf8=true "$url"
+  if [ -n "$filename" ]; then
+    echo "ชื่อไฟล์: $filename"
+    aria2c -x16 -s16 -k1M -o "$filename" "$url"
+  else
+    aria2c -x16 -s16 -k1M --content-disposition-default-utf8=true "$url"
+  fi
 }
 
 ckpt()    { _dl_model "checkpoints" "$1"; }
@@ -63,10 +84,7 @@ vae()     { _dl_model "vae" "$1"; }
 unet()    { _dl_model "diffusion_models" "$1"; }
 clipenc() { _dl_model "text_encoders" "$1"; }
 EOF
-  echo "เพิ่ม shortcut แล้ว"
-else
-  echo "มี shortcut อยู่แล้ว ข้าม"
-fi
+echo "เพิ่ม/อัปเดต shortcut แล้ว"
 source ~/.bashrc
 
 echo ""
