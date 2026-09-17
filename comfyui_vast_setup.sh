@@ -29,11 +29,11 @@ mkdir -p /workspace/ComfyUI/models/{checkpoints,diffusion_models,loras,vae,text_
 
 echo "=== เช็ค/ติดตั้ง ComfyUI-Manager ==="
 cd /workspace/ComfyUI/custom_nodes
-if [ -d "ComfyUI-Manager" ]; then
+if find . -maxdepth 1 -iname "comfyui-manager" | grep -q .; then
   echo "มี Manager ติดมากับ template แล้ว ข้าม"
 else
-  git clone https://github.com/ltdrdata/ComfyUI-Manager.git
-  pip install -r ComfyUI-Manager/requirements.txt --break-system-packages 2>/dev/null || pip install -r ComfyUI-Manager/requirements.txt
+  git clone https://github.com/Comfy-Org/ComfyUI-Manager comfyui-manager
+  pip install -r comfyui-manager/requirements.txt --break-system-packages 2>/dev/null || pip install -r comfyui-manager/requirements.txt
 fi
 
 echo "=== เพิ่ม shortcut โหลดโมเดล: ckpt / lora / vae / unet / clipenc ==="
