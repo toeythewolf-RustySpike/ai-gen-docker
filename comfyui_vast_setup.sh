@@ -4,6 +4,7 @@
 # สคริปต์ setup สำหรับ ComfyUI บน Vast.ai (template: vastai/comfy)
 # แยกไฟล์จาก Forge Neo entrypoint.sh โดยเจตนา — คนละระบบ ไม่เกี่ยวกัน
 # รันครั้งเดียวหลังเปิด Jupyter Terminal ของ instance ใหม่
+# (หรือตั้งใน PROVISIONING_SCRIPT ให้รันอัตโนมัติตอนเปิด instance)
 # =============================================================
 set -e
 
@@ -29,11 +30,11 @@ mkdir -p /workspace/ComfyUI/models/{checkpoints,diffusion_models,loras,vae,text_
 
 echo "=== เช็ค/ติดตั้ง ComfyUI-Manager ==="
 cd /workspace/ComfyUI/custom_nodes
-if find . -maxdepth 1 -iname "comfyui-manager" | grep -q .; then
+if [ -d "ComfyUI-Manager" ]; then
   echo "มี Manager ติดมากับ template แล้ว ข้าม"
 else
-  git clone https://github.com/Comfy-Org/ComfyUI-Manager comfyui-manager
-  pip install -r comfyui-manager/requirements.txt --break-system-packages 2>/dev/null || pip install -r comfyui-manager/requirements.txt
+  git clone https://github.com/ltdrdata/ComfyUI-Manager.git
+  pip install -r ComfyUI-Manager/requirements.txt --break-system-packages 2>/dev/null || pip install -r ComfyUI-Manager/requirements.txt
 fi
 
 echo "=== เพิ่ม shortcut โหลดโมเดล: ckpt / lora / vae / unet / clipenc ==="
@@ -87,11 +88,52 @@ EOF
 echo "เพิ่ม/อัปเดต shortcut แล้ว"
 source ~/.bashrc
 
+echo "=== ติดตั้ง custom node เพิ่มเติม (9 ตัว) ==="
+cd /workspace/ComfyUI/custom_nodes
+for repo in \
+  "https://github.com/ltdrdata/ComfyUI-Impact-Pack.git" \
+  "https://github.com/ltdrdata/ComfyUI-Impact-Subpack.git" \
+  "https://github.com/pamparamm/ComfyUI-ppm.git" \
+  "https://github.com/Danand/ComfyUI-ComfyCouple.git" \
+  "https://github.com/lquesada/ComfyUI-Inpaint-CropAndStitch.git" \
+  "https://github.com/Acly/comfyui-inpaint-nodes.git" \
+  "https://github.com/rgthree/rgthree-comfy.git" \
+  "https://github.com/audioscavenger/save-image-extended-comfyui.git" \
+  "https://github.com/mickmumpitz/ComfyUI-Mickmumpitz-Nodes.git" \
+; do
+  dirname=$(basename "$repo" .git)
+  if [ -d "$dirname" ]; then
+    echo "มีอยู่แล้ว ข้าม: $dirname"
+  else
+    git clone "$repo" &
+  fi
+done
+wait
+echo "--- โคลนเสร็จหมดแล้ว กำลังติดตั้ง dependency ของแต่ละ node ---"
+for dir in */; do
+  if [ -f "${dir}requirements.txt" ]; then
+    echo "ติดตั้ง dependency: $dir"
+    pip install -r "${dir}requirements.txt" --break-system-packages -q 2>/dev/null || pip install -r "${dir}requirements.txt" -q
+  fi
+done
+
+echo "=== โหลด checkpoint หลัก (oneObsession) ==="
+export CIVITAI_TOKEN="5fcd18ba0d970c56bdb85b36fd7fd5a1"
+ckpt "https://civitai.red/models/1318945/one-obsession?modelVersionId=3218603"
+
+echo "=== โหลดโมเดล face_yolov8m (สำหรับ FaceDetailer) ==="
+mkdir -p /workspace/ComfyUI/models/ultralytics/bbox
+cd /workspace/ComfyUI/models/ultralytics/bbox
+if [ -f "face_yolov8m.pt" ]; then
+  echo "มีอยู่แล้ว ข้าม"
+else
+  aria2c -x16 -s16 "https://huggingface.co/Bingsu/adetailer/resolve/main/face_yolov8m.pt"
+fi
+
 echo ""
 echo "=== เสร็จแล้ว ==="
 echo "ใช้งาน shortcut ได้เลย เช่น:"
-echo '  export CIVITAI_TOKEN="xxxxxxxx"   # ตั้งถ้าโมเดลต้อง login'
-echo '  ckpt https://civitai.com/models/12345?modelVersionId=67890'
+echo '  lora https://civitai.com/models/12345?modelVersionId=67890'
 echo '  unet https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/diffusion_models/z_image_turbo_bf16.safetensors'
 echo ""
-echo "เปิด ComfyUI จากหน้า portal แล้วเช็คว่าหน้า UI ขึ้นปกติ"
+echo "เปิด ComfyUI จากหน้า portal แล้วเช็คว่าหน้า UI ขึ้นปกติ — restart ComfyUI 1 ครั้งให้ node ใหม่โหลดครบ"
