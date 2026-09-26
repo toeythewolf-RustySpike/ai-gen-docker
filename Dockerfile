@@ -75,4 +75,37 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt -c /tmp/constraint
 # เท่านั้น (ไม่ใช่ตอน build) ทำให้ทุกครั้งที่เช่า instance ใหม่ ต้องรอ pip install ซ้ำ 2-5 นาที
 # แก้โดยไล่ install ตั้งแต่ตอน build image เลย จะได้ cache ไว้ถาวรในตัว image
 # หมายเหตุ: ใช้ bash -c บรรทัดเดียว (ไม่ใช่ for...done แบบหลายบรรทัด) เพราะเคยเจอปัญหา
-# copy-paste ผ่าน
+# copy-paste ผ่าน GitHub web editor ทำให้คำว่า "done" หายไปตอนวาง ทำให้ build error
+RUN bash -c 'for req in extensions-builtin/*/requirements.txt; do if [ -f "$req" ]; then echo "[build] Installing extension requirements: $req"; python3 -m pip install --no-cache-dir -r "$req" -c /tmp/constraints.txt || true; fi; done'
+
+# ---- Verify: เช็คว่า torch เป็น "CUDA build" (ไม่ใช่ CPU-only wheel) ----
+# หมายเหตุ: docker build ไม่มี GPU device ให้ container (GPU passthrough มีแค่ตอน `docker run --gpus`)
+# ดังนั้นเช็คได้แค่ "torch.version.cuda ไม่ใช่ None" (แปลว่าเป็น CUDA wheel) เท่านั้น
+# ส่วนเช็คว่า GPU ใช้งานได้จริง (torch.cuda.is_available()) ต้องรอไปเช็คตอน runtime ใน entrypoint.sh
+RUN python3 -c "import torch; \
+    print('torch version:', torch.__version__); \
+    print('torch CUDA build:', torch.version.cuda); \
+    assert torch.version.cuda is not None, 'FATAL: torch ที่ติดตั้งเป็น CPU-only wheel ไม่ใช่ CUDA build — build ต้องหยุดตรงนี้'"
+
+# ---- โฟลเดอร์โมเดล (ตามโครงสร้างที่ Forge Neo ใช้จริง) ----
+RUN mkdir -p \
+    models/Stable-diffusion \
+    models/Lora \
+    models/text_encoder \
+    models/VAE
+
+# ---- Scripts: common_download.sh (ใช้ร่วมกัน) + ckpt/lora (คำสั่งเรียกใช้ตรงๆ ผ่าน SSH) ----
+COPY scripts/common_download.sh /workspace/scripts/common_download.sh
+COPY scripts/ttyd_welcome.sh /workspace/scripts/ttyd_welcome.sh
+COPY scripts/ckpt /usr/local/bin/ckpt
+COPY scripts/lora /usr/local/bin/lora
+RUN chmod +x /workspace/scripts/common_download.sh /workspace/scripts/ttyd_welcome.sh /usr/local/bin/ckpt /usr/local/bin/lora
+
+EXPOSE 7860
+EXPOSE 7681
+
+# entrypoint จะ export PYTORCH_VERSION ทับ (fix env var bug) ก่อนเรียก launch.py จริง
+COPY entrypoint.sh /workspace/entrypoint.sh
+RUN chmod +x /workspace/entrypoint.sh
+
+ENTRYPOINT ["/workspace/entrypoint.sh"]
