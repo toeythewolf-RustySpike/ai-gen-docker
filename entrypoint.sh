@@ -41,4 +41,7 @@ echo "=============================================="
 echo "[entrypoint] Starting Forge Neo..."
 # --cuda-malloc: Forge Neo เตือนใน log ทุกครั้งว่า RTX 30 series ขึ้นไปรองรับ flag นี้
 # และช่วยเพิ่มความเร็วได้ (ยืนยันซ้ำจาก community guide การใช้ Wan 2.2 บน Forge Neo ด้วย)
-exec python3 launch.py --listen --port 7860 --api --cuda-malloc "$@"
+# --xformers: เช็คแล้วว่า xformers==0.0.35 ต้องการ torch>=2.10 ตรงกับที่ pin ไว้ในโปรเจคนี้พอดี
+# ช่วยเพิ่มความเร็วตอน generate จริง (attention layer) ถ้าติดตั้งไม่สำเร็จ webui จะเปิดต่อได้ปกติ
+# (Forge Neo ครอบ try/except ไว้ ไม่ crash) แค่ไม่ได้ speed boost เท่านั้น
+exec python3 launch.py --listen --port 7860 --api --cuda-malloc --xformers "$@"
