@@ -5,11 +5,7 @@
 
 clear
 echo "=============================================="
-if [ -f /workspace/webui_url.txt ]; then
-    echo " Forge Neo (webui): $(cat /workspace/webui_url.txt)"
-else
-    echo " Forge Neo (webui): ยังไม่พร้อม หรือไม่ได้เปิด ngrok ไว้"
-fi
+echo " Forge Neo (webui): เข้าผ่าน IP:Port ที่หน้า Vast.ai (Instance > IP & Port Info)"
 echo "=============================================="
 echo " คำสั่งที่ใช้บ่อย:"
 echo "   ckpt <URL> [zimage]   โหลด checkpoint ใหม่"
