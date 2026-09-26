@@ -30,46 +30,13 @@ fi
 ensure_model_arch_deps "${MODEL_ARCH}" \
     || echo "[entrypoint] คำเตือน: โหลดไฟล์เสริมของ ${MODEL_ARCH} ไม่สำเร็จ — webui จะเปิดต่อ แก้ทีหลังผ่าน SSH ได้"
 
-# --- เปิด ngrok อัตโนมัติ (ถ้ามี NGROK_AUTHTOKEN ส่งมาเป็น environment variable) ---
-# เหตุผล: Vast.ai สุ่ม external port ทุก instance ทำให้ต้องเข้า UI ไปหา IP:Port เองทุกครั้ง
-# ngrok แก้ปัญหานี้โดยให้ URL คงรูปแบบเดียวกันเสมอ (https://xxxx.ngrok-free.dev)
-# หมายเหตุ: authtoken ไม่ได้ฝังอยู่ในไฟล์นี้หรือใน image เลย ต้องส่งผ่าน
-#   `-e NGROK_AUTHTOKEN=...` ตอนสร้าง instance เองเท่านั้น — ถ้าไม่ตั้งค่า จะข้าม
-#   ส่วนนี้ไปเฉย ๆ แล้วใช้วิธีเดิม (หา IP:Port จากหน้า Vast.ai) แทน
-#
-# หมายเหตุสำคัญ: เคยลองเปิด 2 tunnel พร้อมกัน (webui + ttyd) มาก่อน แต่พบว่า ngrok
-# แผนฟรีให้ "dev domain" เดียวต่อบัญชีเท่านั้น ทุก tunnel เลยได้ URL ซ้ำกันหมด ใช้แยกกันไม่ได้จริง
-# (ยืนยันจาก docs ngrok.com/docs/pricing-limits/free-plan-limits) จึงกลับมาใช้ tunnel เดียว
-# สำหรับ webui เท่านั้น — ส่วน terminal ให้ใช้ SSH ที่ Vast.ai เปิดให้อยู่แล้วแทน (ไม่มีค่าใช้จ่ายเพิ่ม)
-
-WEBUI_URL=""
-
-if [ -n "${NGROK_AUTHTOKEN}" ]; then
-    echo "[entrypoint] พบ NGROK_AUTHTOKEN — กำลังเปิด public URL..."
-    ngrok config add-authtoken "${NGROK_AUTHTOKEN}" >/dev/null 2>&1
-    nohup ngrok http 7860 --log=/workspace/ngrok.log >/dev/null 2>&1 &
-
-    for i in $(seq 1 15); do
-        WEBUI_URL="$(curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | jq -r '.tunnels[0].public_url' 2>/dev/null)"
-        if [ -n "$WEBUI_URL" ] && [ "$WEBUI_URL" != "null" ]; then
-            break
-        fi
-        sleep 1
-    done
-
-    if [ -n "${WEBUI_URL}" ] && [ "${WEBUI_URL}" != "null" ]; then
-        echo "=============================================="
-        echo "[entrypoint] เข้า Forge Neo ได้ที่: ${WEBUI_URL}"
-        echo "[entrypoint] เข้า Terminal (เลือก checkpoint/LoRA) ผ่าน SSH — ดูคำสั่งเชื่อมต่อได้ที่หน้า Instance บน Vast.ai"
-        echo "=============================================="
-    else
-        echo "[entrypoint] เตือน: เปิด ngrok ไม่สำเร็จภายในเวลาที่กำหนด"
-        echo "[entrypoint] ใช้วิธีเดิม (หา IP:Port จากหน้า Vast.ai) แทนได้"
-    fi
-else
-    echo "[entrypoint] ไม่พบ NGROK_AUTHTOKEN — ข้ามการเปิด public URL อัตโนมัติ"
-    echo "[entrypoint] เข้าผ่าน IP:Port ที่ Vast.ai กำหนดให้แทน (ดูได้ที่หน้า IP & Port Info)"
-fi
+# --- แจ้งวิธีเข้า Forge Neo ---
+# เอา ngrok ออกแล้ว: Vast.ai ให้ static public IP + port mapping ตรงมาอยู่แล้ว
+# (ดูได้ที่หน้า Instance > IP & Port Info) เร็วกว่า ไม่มี request quota แบบ ngrok free plan
+echo "=============================================="
+echo "[entrypoint] Forge Neo กำลังเปิดที่ port 7860"
+echo "[entrypoint] เข้าผ่าน IP:Port ที่หน้า Vast.ai (Instance > IP & Port Info)"
+echo "=============================================="
 
 echo "[entrypoint] Starting Forge Neo..."
 # --cuda-malloc: Forge Neo เตือนใน log ทุกครั้งว่า RTX 30 series ขึ้นไปรองรับ flag นี้
